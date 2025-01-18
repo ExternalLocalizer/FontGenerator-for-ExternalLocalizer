@@ -1,48 +1,59 @@
-mod types;
+use std::{fs, path::Path, vec};
 
-use types::{CharRangeList, Counter as _};
+use anyhow::Context;
+use xml::DynamicFontBuilder;
+
+mod types;
+mod wrapper;
+mod xml;
 
 fn main() -> anyhow::Result<()> {
-    // Windowsシステムにあるフォントファイル（例: Arial のフォントファイルのパス）
-    // let font_path = r"C:\Users\eva828\AppData\Local\Microsoft\Windows\Fonts\natumemozi-o.ttf";
-    // let font_path =
-    //     r"C:\Users\eva828\AppData\Local\Microsoft\Windows\Fonts\NotoSansJP-VariableFont_wght.ttf";
+    println!("Generating .dynamicfont files...");
+    let basic_font = DynamicFontBuilder::new()
+        .add_font_name("なつめもじ抑".to_string())
+        .add_font_name("Noto Sans JP".to_string())
+        .build()?
+        .pack()
+        .to_xml();
 
-    let font_path_list = [
-        r"C:\Users\eva828\AppData\Local\Microsoft\Windows\Fonts\natumemozi-o.ttf",
-        r"C:\Users\eva828\AppData\Local\Microsoft\Windows\Fonts\NotoSansJP-VariableFont_wght.ttf",
+    let death_font = DynamicFontBuilder::new()
+        .add_font_name("なつめもじ抑".to_string())
+        .add_font_name("Noto Sans JP".to_string())
+        .size(24.0)
+        .build()?
+        .pack()
+        .to_xml();
+
+    let files = vec![
+        ("Combat_Crit", &basic_font),
+        ("Combat_Text", &basic_font),
+        ("Death_Text", &death_font),
+        ("Item_Stack", &basic_font),
+        ("Mouse_Text", &basic_font),
     ];
 
-    let mut include_chars = Vec::with_capacity(font_path_list.len());
-
-    for font_path in font_path_list.iter() {
-        // フォントファイルを読み込む
-        let font = font::File::open(font_path)?;
-
-        // フォントがサポートするグリフ（文字）を列挙する
-        let mut supported_chars = Vec::new();
-
-        for mut f in font.fonts {
-            supported_chars.extend(f.characters()?);
-        }
-
-        let mut supported_chars = CharRangeList::from(supported_chars);
-
-        for chars in include_chars.iter() {
-            supported_chars.subtract_range_list(&chars);
-        }
-
-        // // サポートされているグリフを表示する
-        // for c in supported_chars.iter() {
-        //     println!("{}", c);
-        // }
-
-        include_chars.push(supported_chars);
+    let dyn_font_dir = Path::new("fonts/dynamic");
+    fs::create_dir_all(dyn_font_dir)?;
+    for (file_name, font) in files {
+        let file = dyn_font_dir.join(file_name).with_extension("dynamicfont");
+        fs::write(file, font)?;
     }
 
-    for (i, chars) in include_chars.iter().enumerate() {
-        println!("Font: {}", font_path_list[i]);
-        println!("\tCount: {}", chars.count());
+    println!("Executing DynamicFontGenerator.exe...");
+    wrapper::generate_dynamic_font(dyn_font_dir)?;
+
+    println!("Moving .xnb files...");
+    let xnb_font_dir = Path::new("fonts/xnb");
+    fs::create_dir_all(xnb_font_dir)?;
+    for file in dyn_font_dir.read_dir()? {
+        let file = file?.path();
+
+        if file.extension() != Some("xnb".as_ref()) {
+            continue;
+        }
+
+        let new_file = xnb_font_dir.join(file.file_name().with_context(|| "No file name")?);
+        fs::rename(file, new_file)?;
     }
 
     Ok(())

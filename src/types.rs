@@ -8,8 +8,8 @@ pub trait Counter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CharRange {
-    start: u32,
-    end: u32,
+    pub start: u32,
+    pub end: u32,
 }
 
 impl CharRange {
@@ -172,10 +172,6 @@ impl CharRangeList {
             self.subtract_range(range);
         }
     }
-
-    // pub fn iter(&self) -> std::slice::Iter<CharRange> {
-    //     self.ranges.iter()
-    // }
 }
 
 impl Counter for CharRangeList {
