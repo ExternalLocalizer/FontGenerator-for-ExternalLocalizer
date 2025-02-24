@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use font_kit::{handle::Handle, source::SystemSource};
 use serde::{Serialize, Serializer};
 
@@ -34,7 +36,7 @@ pub struct XnaAsset {
     pub font: DynamicFont,
 }
 
-// #[derive(TypedBuilder)]
+#[derive(Clone)]
 pub struct DynamicFontBuilder {
     font_name_list: Vec<String>,
     size: f32,
@@ -58,8 +60,8 @@ impl DynamicFontBuilder {
         }
     }
 
-    pub fn add_font_name(mut self, font_name: String) -> Self {
-        self.font_name_list.push(font_name);
+    pub fn add_font_name<'a, T: Into<Cow<'a, str>>>(mut self, font_name: T) -> Self {
+        self.font_name_list.push(font_name.into().to_string());
         self
     }
 
@@ -220,7 +222,7 @@ impl DynamicFont {
     }
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, Clone, Copy)]
 #[allow(unused)]
 pub enum FontStyle {
     Regular,
@@ -229,7 +231,7 @@ pub enum FontStyle {
     BoldItalic,
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, Clone, Copy)]
 #[allow(unused)]
 pub enum VerticalOffset {
     DefaultFontAscent,
@@ -252,6 +254,7 @@ pub struct CharacterRegion {
 }
 
 impl CharacterRegion {
+    #[allow(unused)]
     pub fn new(start: char, end: char) -> Self {
         Self {
             font_name: None,
