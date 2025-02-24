@@ -1,4 +1,8 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use font_kit::{handle::Handle, source::SystemSource};
 use serde::{Serialize, Serializer};
@@ -8,13 +12,15 @@ use crate::types::{CharRange, CharRangeList};
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct XnaContent {
+    #[serde(skip)]
+    pub file_name: String,
     #[serde(rename = "@xmlns:Graphics")]
     pipeline: String,
     pub asset: XnaAsset,
 }
 
 impl XnaContent {
-    pub fn to_xml(&self) -> String {
+    fn to_xml(&self) -> String {
         let mut buffer = String::from("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
 
         let mut ser = quick_xml::se::Serializer::new(&mut buffer);
@@ -24,6 +30,16 @@ impl XnaContent {
         buffer = buffer.replace("&amp;", "&");
 
         buffer
+    }
+
+    fn write(&self, directory: &Path) -> anyhow::Result<PathBuf> {
+        let content = self.to_xml();
+        fs::create_dir_all(directory)?;
+        let path = directory
+            .join(&self.file_name)
+            .with_extension("dynamicfont");
+        std::fs::write(&path, &content)?;
+        Ok(path)
     }
 }
 
@@ -36,8 +52,36 @@ pub struct XnaAsset {
     pub font: DynamicFont,
 }
 
+pub struct DynamicFontBuilderBundle {
+    pub directory: PathBuf,
+    pub fonts: Vec<DynamicFontBuilder>,
+}
+
+impl DynamicFontBuilderBundle {
+    pub fn new<T: Into<PathBuf>>(directory: T) -> Self {
+        Self {
+            directory: directory.into(),
+            fonts: Vec::new(),
+        }
+    }
+
+    pub fn add_font(&mut self, font: DynamicFontBuilder) {
+        self.fonts.push(font);
+    }
+
+    pub fn build(self) -> anyhow::Result<Vec<PathBuf>> {
+        let fonts = self
+            .fonts
+            .into_iter()
+            .map(|builder| builder.build()?.pack().write(&self.directory))
+            .collect::<anyhow::Result<Vec<PathBuf>>>()?;
+        Ok(fonts)
+    }
+}
+
 #[derive(Clone)]
 pub struct DynamicFontBuilder {
+    file_name: String,
     font_name_list: Vec<String>,
     size: f32,
     spacing: f32,
@@ -50,6 +94,7 @@ pub struct DynamicFontBuilder {
 impl DynamicFontBuilder {
     pub fn new() -> Self {
         Self {
+            file_name: String::new(),
             font_name_list: Vec::new(),
             size: 16.0,
             spacing: 0.0,
@@ -60,8 +105,17 @@ impl DynamicFontBuilder {
         }
     }
 
-    pub fn add_font_name<'a, T: Into<Cow<'a, str>>>(mut self, font_name: T) -> Self {
+    pub fn add_font_name<'a, T: Into<Cow<'a, str>>>(
+        mut self,
+        font_name: T,
+    ) -> anyhow::Result<Self> {
         self.font_name_list.push(font_name.into().to_string());
+        Ok(self)
+    }
+
+    #[allow(unused)]
+    pub fn file_name<T: Into<Cow<'static, str>>>(mut self, file_name: T) -> Self {
+        self.file_name = file_name.into().to_string();
         self
     }
 
@@ -151,8 +205,18 @@ impl DynamicFontBuilder {
             for (_, chars) in include_chars.iter() {
                 supported_chars.subtract_range_list(&chars);
             }
+            // null文字等を除外
+            supported_chars.subtract_range(&CharRange::new(0, 32));
 
             include_chars.push((font_idx, supported_chars));
+        }
+
+        // TODO: ビルド結果にdefault_characterが含まれない時にエラーを出すべき
+        if include_chars
+            .iter()
+            .all(|(_, chars)| !chars.contains(self.default_character as u32))
+        {
+            anyhow::bail!("Default character not found in any font.\nYou must include the default character in at least one font.");
         }
 
         let character_regions = include_chars
@@ -171,6 +235,7 @@ impl DynamicFontBuilder {
             .into();
 
         Ok(DynamicFont {
+            file_name: self.file_name,
             font_name: base_font_name,
             size: self.size,
             spacing: self.spacing,
@@ -186,6 +251,8 @@ impl DynamicFontBuilder {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct DynamicFont {
+    #[serde(skip)]
+    pub file_name: String,
     pub font_name: String,
     pub size: f32,
     pub spacing: f32,
@@ -213,6 +280,7 @@ impl From<Vec<CharacterRegion>> for CharacterRegions {
 impl DynamicFont {
     pub fn pack(self) -> XnaContent {
         XnaContent {
+            file_name: self.file_name.clone(),
             pipeline: "ReLogic.Content.Pipeline".to_string(),
             asset: XnaAsset {
                 r#type: "Graphics:DynamicFontDescription".to_string(),
@@ -307,6 +375,7 @@ mod tests {
         let test_vec = vec![test_region1, test_region2];
 
         let test_dynamic_font = DynamicFont {
+            file_name: "test".to_string(),
             font_name: "Arial".to_string(),
             size: 16.0,
             spacing: 0.0,

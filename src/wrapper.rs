@@ -3,8 +3,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-const DYNAMIC_FONT_GENERATOR_EXE: &str =
-    r"C:\Users\eva828\Downloads\DFG_0.6\DynamicFontGenerator.exe";
+const DYNAMIC_FONT_GENERATOR_EXE: &str = r"dfg/DynamicFontGenerator.exe";
 
 pub fn generate_dynamic_font(target_dir: &Path) -> anyhow::Result<()> {
     let output = Command::new(DYNAMIC_FONT_GENERATOR_EXE)

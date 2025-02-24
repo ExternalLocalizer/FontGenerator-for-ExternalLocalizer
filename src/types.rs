@@ -13,6 +13,20 @@ pub struct CharRange {
 }
 
 impl CharRange {
+    pub fn new(start: u32, end: u32) -> Self {
+        CharRange { start, end }
+    }
+    #[allow(unused)]
+    pub fn new_single(c: u32) -> Self {
+        CharRange { start: c, end: c }
+    }
+}
+
+impl CharRange {
+    fn contains(&self, c: u32) -> bool {
+        self.start <= c && c <= self.end
+    }
+
     // 範囲が隣接している、または重複しているかを判定
     fn merges_with(&self, other: &CharRange) -> bool {
         self.end + 1 >= other.start && self.start <= other.end + 1
@@ -113,6 +127,10 @@ impl CharRangeList {
     // 新しいCharRangeListを作成
     pub fn new() -> Self {
         CharRangeList { ranges: Vec::new() }
+    }
+
+    pub fn contains(&self, c: u32) -> bool {
+        self.ranges.iter().any(|r| r.contains(c))
     }
 
     // 範囲を適切な位置に挿入し、前後を確認してマージ
