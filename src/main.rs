@@ -7,22 +7,28 @@ mod types;
 mod wrapper;
 mod xml;
 
+static MOD_SOURCE: &str = r"C:\Users\eva828\Documents\My Games\Terraria\tModLoader\ModSources\";
+
 fn main() -> anyhow::Result<()> {
     // std::env::set_var("RUST_BACKTRACE", "1");
 
     let dyn_font_dir = Path::new("fonts").join("dynamic");
-    let xnb_font_dir = Path::new("fonts").join("xnb");
+    // let xnb_font_dir = Path::new("fonts").join("xnb");
+    let xnb_font_dir = Path::new(MOD_SOURCE)
+        .join("ExternalLocalizer")
+        .join("Assets")
+        .join("Fonts");
 
     // フォルダをリセット
     println!("Clearing directories...");
     fs::remove_dir_all(&dyn_font_dir).ok();
-    fs::remove_dir_all(&xnb_font_dir).ok();
     fs::create_dir_all(&dyn_font_dir)?;
-    fs::create_dir_all(&xnb_font_dir)?;
+    // fs::remove_dir_all(&xnb_font_dir).ok();
+    // fs::create_dir_all(&xnb_font_dir)?;
 
     // DynamicFontBuilderBundleを作成
     let mut bundles = Vec::new();
-    bundles.push(terraria_fonts(&dyn_font_dir)?);
+    // bundles.push(terraria_fonts(&dyn_font_dir)?);
     bundles.push(noxusboss_fonts(&dyn_font_dir)?);
 
     // ビルドしdynamicfontファイルを書き出し
@@ -55,8 +61,8 @@ fn main() -> anyhow::Result<()> {
 
 fn terraria_fonts(base_dir: &Path) -> anyhow::Result<DynamicFontBuilderBundle> {
     let base_font = DynamicFontBuilder::new()
-        .add_font_name("なつめもじ抑")?
-        .add_font_name("Noto Sans JP")?
+        .add_font_name("なつめもじ抑")
+        .add_font_name("Noto Sans JP")
         .use_kerning(false)
         .vertical_offset(VerticalOffset::MaxAscent)
         .spacing(-12f32);
@@ -82,12 +88,45 @@ fn terraria_fonts(base_dir: &Path) -> anyhow::Result<DynamicFontBuilderBundle> {
 
 fn noxusboss_fonts(base_dir: &Path) -> anyhow::Result<DynamicFontBuilderBundle> {
     let base_font = DynamicFontBuilder::new()
-        .add_font_name("07にくまるフォント")?
-        .use_kerning(false)
-        .vertical_offset(VerticalOffset::MaxAscent)
-        .spacing(-12f32);
+        .use_kerning(true)
+        .vertical_offset(VerticalOffset::DefaultFontAscent)
+        .spacing(0f32);
 
-    let mut bundle = DynamicFontBuilderBundle::new(base_dir.join("noxusboss"));
-    bundle.add_font(base_font.clone().file_name("SolynText"));
+    let solyn_font = base_font
+        .clone()
+        .add_font_name("Noto Serif CJK JP")
+        .size(28f32);
+
+    let mut bundle = DynamicFontBuilderBundle::new(base_dir.join("WrathOfTheGods"));
+    bundle.add_font(
+        solyn_font
+            .clone()
+            .file_name("SolynText")
+            .style(FontStyle::Regular),
+    );
+    bundle.add_font(
+        solyn_font
+            .clone()
+            .file_name("SolynTextItalics")
+            .style(FontStyle::Italic),
+    );
+    bundle.add_font(
+        base_font
+            .clone()
+            .file_name("SolynFightDialogue")
+            .add_font_name("07にくまるフォント")
+            .size(32f32),
+    );
+    // bundle.add_font(
+    //     base_font
+    //         .clone()
+    //         .file_name("DraedonText")
+    //         .add_font_name("ノスタルドット（M+）")
+    //         // .add_font_name("x12y12pxMaruMinya")
+    //         // .vertical_offset(VerticalOffset::MaxAscent)
+    //         .use_kerning(false)
+    //         .size(20f32),
+    // );
+
     Ok(bundle)
 }

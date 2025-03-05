@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     fs,
-    path::{Path, PathBuf},
+    path::{self, Path, PathBuf},
 };
 
 use font_kit::{handle::Handle, source::SystemSource};
@@ -105,12 +105,9 @@ impl DynamicFontBuilder {
         }
     }
 
-    pub fn add_font_name<'a, T: Into<Cow<'a, str>>>(
-        mut self,
-        font_name: T,
-    ) -> anyhow::Result<Self> {
+    pub fn add_font_name<'a, T: Into<Cow<'a, str>>>(mut self, font_name: T) -> Self {
         self.font_name_list.push(font_name.into().to_string());
-        Ok(self)
+        self
     }
 
     #[allow(unused)]
@@ -184,7 +181,9 @@ impl DynamicFontBuilder {
                     anyhow::bail!("Failed to load font: {}", name);
                 };
 
-                Ok(path.to_str().unwrap().to_string())
+                let path = path.to_path_buf();
+                println!("Found font: {}", path.display());
+                Ok(path.to_string_lossy().to_string())
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
 
