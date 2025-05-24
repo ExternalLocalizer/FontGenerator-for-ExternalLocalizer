@@ -1,13 +1,13 @@
 use std::{
     borrow::Cow,
     fs,
-    path::{self, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use font_kit::{handle::Handle, source::SystemSource};
 use serde::{Serialize, Serializer};
 
-use crate::types::{CharRange, CharRangeList};
+use crate::types::{CharRange, CharRangeList, FontName, FontNameBundle};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "PascalCase")]
@@ -82,7 +82,7 @@ impl DynamicFontBuilderBundle {
 #[derive(Clone)]
 pub struct DynamicFontBuilder {
     file_name: String,
-    font_name_list: Vec<String>,
+    font_name_list: Vec<FontName<'static>>,
     size: f32,
     spacing: f32,
     use_kerning: bool,
@@ -105,8 +105,8 @@ impl DynamicFontBuilder {
         }
     }
 
-    pub fn add_font_name<'a, T: Into<Cow<'a, str>>>(mut self, font_name: T) -> Self {
-        self.font_name_list.push(font_name.into().to_string());
+    pub fn add_font_name<'a>(mut self, font_name: FontName<'static>) -> Self {
+        self.font_name_list.push(font_name);
         self
     }
 
@@ -157,85 +157,84 @@ impl DynamicFontBuilder {
             anyhow::bail!("No font names specified");
         }
 
-        let base_font_name = self.font_name_list[0].to_string();
-
         let font_system_source = SystemSource::new();
 
-        let font_path_list = self
+        // 全てのFontNameをFullNameに変換
+        let font_name_bundle_list = self
             .font_name_list
             .iter()
-            .map(|name| {
-                let Ok(font) = font_system_source.select_family_by_name(name) else {
-                    anyhow::bail!("Font not found: {}", name);
-                };
+            .map(|name| -> anyhow::Result<_> { name.into_bundle(&font_system_source) })
+            .collect::<anyhow::Result<Vec<FontNameBundle>>>()?;
 
-                let Some(font) = font.fonts().first() else {
-                    anyhow::bail!("Failed to load font: {}", name);
-                };
+        // // FontNameからフォントパスを取得
+        // let font_path_list = font_name_bundle_list
+        //     .iter()
+        //     .map(|name| {
+        //         let Ok(handle) = name.get_font_handle(&font_system_source) else {
+        //             anyhow::bail!("Font not found: {}", name);
+        //         };
 
-                let Handle::Path {
-                    path,
-                    font_index: _,
-                } = font
-                else {
-                    anyhow::bail!("Failed to load font: {}", name);
-                };
+        //         let Handle::Path {
+        //             path,
+        //             font_index: _,
+        //         } = handle
+        //         else {
+        //             anyhow::bail!("Failed to load font: {}", name);
+        //         };
 
-                let path = path.to_path_buf();
-                println!("Found font: {}", path.display());
-                Ok(path.to_string_lossy().to_string())
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+        //         let path = path.to_path_buf();
+        //         println!("Found font: {}", path.display());
+        //         Ok(path)
+        //     })
+        //     .collect::<anyhow::Result<Vec<_>>>()?;
 
-        let mut include_chars: Vec<(usize, CharRangeList)> =
-            Vec::with_capacity(font_path_list.len());
-
-        for (font_idx, font_path) in font_path_list.iter().enumerate() {
-            let font = font::File::open(font_path)?;
+        // フォントを読み込み、サポートされている文字を取得
+        let mut include_chars: Vec<CharRangeList> = Vec::with_capacity(font_name_bundle_list.len());
+        for (font_idx, font_name) in font_name_bundle_list.iter().enumerate() {
+            let font_path = font_name.path(&font_system_source)?;
+            let font_file = font::File::open(font_path)?;
 
             let mut supported_chars = Vec::new();
 
-            for mut f in font.fonts {
+            for mut f in font_file.fonts {
                 supported_chars.extend(f.characters()?);
             }
 
             let mut supported_chars = CharRangeList::from(supported_chars);
 
-            for (_, chars) in include_chars.iter() {
+            for chars in include_chars.iter() {
                 supported_chars.subtract_range_list(&chars);
             }
             // null文字等を除外
-            supported_chars.subtract_range(&CharRange::new(0, 32));
+            supported_chars.subtract_range(&CharRange::new(0, 31));
 
-            include_chars.push((font_idx, supported_chars));
+            include_chars.push(supported_chars);
         }
 
-        // TODO: ビルド結果にdefault_characterが含まれない時にエラーを出すべき
+        // ビルド結果にdefault_characterが含まれない場合に例外
         if include_chars
             .iter()
-            .all(|(_, chars)| !chars.contains(self.default_character as u32))
+            .all(|chars| !chars.contains(self.default_character as u32))
         {
             anyhow::bail!("Default character not found in any font.\nYou must include the default character in at least one font.");
         }
 
-        let character_regions = include_chars
+        // CharRangeListをCharacterRegionに変換
+        let character_regions: CharacterRegions = include_chars
             .into_iter()
-            .flat_map(|(font_idx, chars)| {
-                let mut chars: Vec<CharacterRegion> = chars.into();
-                if font_idx != 0 {
-                    chars.iter_mut().for_each(|region| {
-                        region.font_name = Some(self.font_name_list[font_idx].to_string());
-                    });
-                }
-                chars
+            .zip(font_name_bundle_list.iter())
+            // FontNameをコピーしながらflatten
+            .flat_map(|(vec, count)| vec.into_iter().map(move |item| (item, count)))
+            // CharacterRegionに変換
+            .map(|(range, font)| {
+                CharacterRegion::from_range(range, Some(font.full.to_string()), None, None)
             })
-            .map(|region| region.into())
-            .collect::<Vec<_>>()
+            .collect::<Vec<CharacterRegion>>()
             .into();
 
         Ok(DynamicFont {
             file_name: self.file_name,
-            font_name: base_font_name,
+            font_name: font_name_bundle_list[0].full.to_string(),
             size: self.size,
             spacing: self.spacing,
             use_kerning: self.use_kerning,
@@ -273,6 +272,26 @@ impl From<Vec<CharacterRegion>> for CharacterRegions {
         Self {
             character_region: vec,
         }
+    }
+}
+
+impl CharacterRegions {
+    pub fn set_font_name(
+        &mut self,
+        font_name_list: &Vec<FontNameBundle<'_>>,
+    ) -> anyhow::Result<()> {
+        if self.character_region.len() != font_name_list.len() {
+            anyhow::bail!(
+                "Font name list length does not match character region length: {} != {}",
+                self.character_region.len(),
+                font_name_list.len()
+            );
+        }
+        for (i, region) in self.character_region.iter_mut().enumerate() {
+            region.font_name = Some(font_name_list[i].full.to_string());
+        }
+
+        Ok(())
     }
 }
 
@@ -344,23 +363,28 @@ where
     serializer.serialize_str(&xml_reference)
 }
 
-impl From<CharRange> for CharacterRegion {
-    fn from(range: CharRange) -> Self {
+impl CharacterRegion {
+    pub fn from_range(
+        range: CharRange,
+        font_name: Option<String>,
+        size: Option<f32>,
+        style: Option<FontStyle>,
+    ) -> Self {
         Self {
-            font_name: None,
-            size: None,
-            style: None,
+            font_name,
+            size,
+            style,
             start: char::from_u32(range.start).unwrap_or_default(),
             end: char::from_u32(range.end).unwrap_or_default(),
         }
     }
 }
 
-impl Into<Vec<CharacterRegion>> for CharRangeList {
-    fn into(self) -> Vec<CharacterRegion> {
-        self.into_iter().map(|range| range.into()).collect()
-    }
-}
+// impl Into<Vec<CharacterRegion>> for CharRangeList {
+//     fn into(self) -> Vec<CharacterRegion> {
+//         self.into_iter().map(|range| range.into()).collect()
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

@@ -1,9 +1,126 @@
-use std::fmt::Display;
+use std::{borrow::Cow, fmt::Display, path::PathBuf};
 
 use font::characters::Character;
+use font_kit::source::SystemSource;
 
 pub trait Counter {
     fn count(&self) -> usize;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FontName<'a> {
+    Family(Cow<'a, str>),
+    PostScript(Cow<'a, str>),
+    Full(Cow<'a, str>),
+}
+
+impl<'a> FontName<'a> {
+    pub fn family<S: Into<Cow<'a, str>>>(name: S) -> Self {
+        FontName::Family(name.into())
+    }
+
+    pub fn postscript<S: Into<Cow<'a, str>>>(name: S) -> Self {
+        FontName::PostScript(name.into())
+    }
+
+    pub fn full<S: Into<Cow<'a, str>>>(name: S) -> Self {
+        FontName::Full(name.into())
+    }
+}
+
+impl<'a> Display for FontName<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FontName::Family(name) => write!(f, "{}", name),
+            FontName::PostScript(name) => write!(f, "{}", name),
+            FontName::Full(name) => write!(f, "{}", name),
+        }
+    }
+}
+
+impl<'a> FontName<'a> {
+    pub fn get_font_handle(
+        &self,
+        source: &SystemSource,
+    ) -> Result<font_kit::handle::Handle, font_kit::error::SelectionError> {
+        match self {
+            FontName::Family(name) => source
+                .select_family_by_name(name)
+                .map(|fh| fh.fonts()[0].clone()),
+            FontName::PostScript(name) => source.select_by_postscript_name(name),
+            FontName::Full(name) => source.all_fonts().and_then(|fonts| {
+                fonts
+                    .into_iter()
+                    .find(|f| match f.load() {
+                        Ok(font) => font.full_name() == *name,
+                        Err(_) => false,
+                    })
+                    .ok_or(font_kit::error::SelectionError::NotFound)
+            }),
+        }
+    }
+
+    pub fn into_bundle(&self, source: &SystemSource) -> anyhow::Result<FontNameBundle<'a>> {
+        let handle = self.get_font_handle(source)?;
+        let font = handle.load()?;
+        let family = font.family_name().to_string();
+        let postscript = font.postscript_name().unwrap_or_default();
+        let full = font.full_name();
+
+        Ok(FontNameBundle {
+            family: Cow::Owned(family),
+            postscript: Cow::Owned(postscript),
+            full: Cow::Owned(full),
+        })
+    }
+
+    pub fn path(&self, source: &SystemSource) -> anyhow::Result<PathBuf> {
+        if let font_kit::handle::Handle::Path {
+            path,
+            font_index: _,
+        } = self.get_font_handle(source)?
+        {
+            Ok(path)
+        } else {
+            anyhow::bail!("Failed to load font: {}", self);
+        }
+    }
+}
+
+pub struct FontNameBundle<'a> {
+    pub family: Cow<'a, str>,
+    pub postscript: Cow<'a, str>,
+    pub full: Cow<'a, str>,
+}
+
+impl FontNameBundle<'_> {
+    pub fn get_font_handle(
+        &self,
+        source: &SystemSource,
+    ) -> Result<font_kit::handle::Handle, font_kit::error::SelectionError> {
+        FontName::Full(self.full.clone()).get_font_handle(source)
+    }
+    pub fn path(&self, source: &SystemSource) -> anyhow::Result<PathBuf> {
+        if let font_kit::handle::Handle::Path {
+            path,
+            font_index: _,
+        } = self.get_font_handle(source)?
+        {
+            Ok(path)
+        } else {
+            anyhow::bail!("Failed to load font: {}", self);
+        }
+    }
+}
+
+impl Display for FontNameBundle<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "FontNameBundle {{ family: {}, postscript: {}, full: {} }}",
+            self.family, self.postscript, self.full
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
