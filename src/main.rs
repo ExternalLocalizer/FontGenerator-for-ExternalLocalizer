@@ -98,12 +98,10 @@ fn export_all_fonts() -> anyhow::Result<()> {
 #[allow(unused)]
 fn terraria_fonts(base_dir: &Path) -> anyhow::Result<DynamicFontBuilderBundle> {
     let base_font = DynamicFontBuilder::new()
-        .add_font_name(FontName::postscript("YOzCb"))
-        .add_font_name(FontName::postscript("NotoSansJP-Regular"))
+        .add_font_name(FontName::full("YOzCbBlack"))
         .use_kerning(true)
         .vertical_offset(VerticalOffset::DefaultFontAscent)
         .size(12f32)
-        .style(FontStyle::Bold)
         .spacing(0f32);
 
     let mut bundle = DynamicFontBuilderBundle::new(base_dir.join("terraria"));
@@ -111,17 +109,10 @@ fn terraria_fonts(base_dir: &Path) -> anyhow::Result<DynamicFontBuilderBundle> {
     bundle.add_font(base_font.clone().file_name("Combat_Crit"));
     bundle.add_font(base_font.clone().file_name("Item_Stack"));
     bundle.add_font(
-        base_font
-            .clone()
-            .file_name("Mouse_Text")
-            .style(FontStyle::Bold),
+        base_font.clone().file_name("Mouse_Text"), // .style(FontStyle::Bold),
     );
     bundle.add_font(
-        base_font
-            .clone()
-            .file_name("Death_Text")
-            .size(24f32)
-            .style(FontStyle::Bold),
+        base_font.clone().file_name("Death_Text").size(24f32), // .style(FontStyle::Bold),
     );
     Ok(bundle)
 }
