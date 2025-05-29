@@ -1,0 +1,50 @@
+# 入力フォントと出力フォントのパスを設定
+input_path = "ttf/YOzBC_.ttf"
+output_path = "ttf/YOzBC_Black.ttf"
+
+font_name = "YOzCbBlack"
+family_name = "YOzCbBlack"
+full_name = "YOzCbBlack"
+sub_family_name = "Black"
+
+weight = 20
+
+# フォントを開く
+Open(input_path)
+
+# フォント名を変更
+SetFontNames(font_name, family_name, full_name, sub_family_name)
+# English
+SetTTFName(0x409, 2, sub_family_name) # Sub family name
+SetTTFName(0x409, 3, font_name)       # Unique font identifier
+
+# Japanese
+SetTTFName(0x411, 1, family_name)     # Family name
+SetTTFName(0x411, 2, sub_family_name) # Sub family name
+SetTTFName(0x411, 3, font_name)       # Unique font identifier
+SetTTFName(0x411, 4, full_name)       # Full font name
+
+# 対象の指定
+SelectWorthOutputting()
+
+# クリーンアップ
+RemoveOverlap()
+CorrectDirection()
+
+# 太字化（Change Weight）
+# ChangeWeight(weight)
+ExpandStroke(weight, 3, 3, 0, 57) # width, line cap, line join, 0, flags
+
+# クリーンアップ
+# Simplify()
+AddExtrema()
+RemoveOverlap()
+CorrectDirection()
+
+# 保存
+Generate(output_path)
+
+# 終了
+Quit()
+
+# PS Encoding: $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
