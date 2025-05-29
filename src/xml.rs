@@ -4,7 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use font_kit::{handle::Handle, source::SystemSource};
+use anyhow::Context;
+use font_kit::source::SystemSource;
 use serde::{Serialize, Serializer};
 
 use crate::types::{CharRange, CharRangeList, FontName, FontNameBundle};
@@ -219,8 +220,12 @@ impl DynamicFontBuilder {
             anyhow::bail!("Default character not found in any font.\nYou must include the default character in at least one font.");
         }
 
+        let base_font = font_name_bundle_list
+            .first()
+            .context("At least one font must be specified")?;
+
         // CharRangeListをCharacterRegionに変換
-        let character_regions: CharacterRegions = include_chars
+        let mut character_regions: CharacterRegions = include_chars
             .into_iter()
             .zip(font_name_bundle_list.iter())
             // FontNameをコピーしながらflatten
@@ -232,9 +237,11 @@ impl DynamicFontBuilder {
             .collect::<Vec<CharacterRegion>>()
             .into();
 
+        character_regions.ommit_base_font(&base_font);
+
         Ok(DynamicFont {
             file_name: self.file_name,
-            font_name: font_name_bundle_list[0].full.to_string(),
+            font_name: base_font.full.to_string(),
             size: self.size,
             spacing: self.spacing,
             use_kerning: self.use_kerning,
@@ -276,22 +283,13 @@ impl From<Vec<CharacterRegion>> for CharacterRegions {
 }
 
 impl CharacterRegions {
-    pub fn set_font_name(
-        &mut self,
-        font_name_list: &Vec<FontNameBundle<'_>>,
-    ) -> anyhow::Result<()> {
-        if self.character_region.len() != font_name_list.len() {
-            anyhow::bail!(
-                "Font name list length does not match character region length: {} != {}",
-                self.character_region.len(),
-                font_name_list.len()
-            );
+    pub fn ommit_base_font(&mut self, base_font: &FontNameBundle) {
+        // base_fontのフォント名を持つCharacterRegionのfont_nameをNoneにする
+        for region in &mut self.character_region {
+            if region.font_name.as_deref() == Some(&base_font.full) {
+                region.font_name = None;
+            }
         }
-        for (i, region) in self.character_region.iter_mut().enumerate() {
-            region.font_name = Some(font_name_list[i].full.to_string());
-        }
-
-        Ok(())
     }
 }
 
