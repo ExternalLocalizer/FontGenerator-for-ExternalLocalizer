@@ -5,9 +5,10 @@ use std::{
 };
 
 use anyhow::Context as _;
-use types::FontName;
-use xml::{DynamicFontBuilder, DynamicFontBuilderBundle, FontStyle, VerticalOffset};
 
+use crate::fonts::create_font_bundles;
+
+mod fonts;
 mod types;
 mod wrapper;
 mod xml;
@@ -35,10 +36,8 @@ fn main() -> anyhow::Result<()> {
     // fs::create_dir_all(&xnb_font_dir)?;
 
     // DynamicFontBuilderBundleを作成
-    let mut bundles = Vec::new();
-    bundles.push(terraria_fonts(&dyn_font_dir)?);
-    // bundles.push(noxusboss_fonts(&dyn_font_dir)?);
-    // bundles.push(terratcg_fonts(&dyn_font_dir)?);
+    let bundles =
+        create_font_bundles(&dyn_font_dir).with_context(|| "Failed to create font bundles")?;
 
     // ビルドしdynamicfontファイルを書き出し
     println!("Generating .dynamicfont files...\n");
@@ -82,9 +81,6 @@ fn export_all_fonts() -> anyhow::Result<()> {
             let postscript_name = font.postscript_name().unwrap_or_default();
             let full_name = font.full_name();
 
-            // writeln!(writer, "Font: {font_name}")?;
-            // writeln!(writer, "\tPostscript Name: {postscript_name}")?;
-            // writeln!(writer, "\tFull Name: {full_name}")?;
             writeln!(writer, "- family_name: \"{}\"", family_name)?;
             writeln!(writer, "  postscript_name: \"{}\"", postscript_name)?;
             writeln!(writer, "  full_name: \"{}\"", full_name)?;
@@ -93,93 +89,4 @@ fn export_all_fonts() -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-#[allow(unused)]
-fn terraria_fonts(base_dir: &Path) -> anyhow::Result<DynamicFontBuilderBundle> {
-    let base_font = DynamicFontBuilder::new()
-        .add_font_name(FontName::full("YOzCbBlack"))
-        .use_kerning(true)
-        .vertical_offset(VerticalOffset::DefaultFontAscent)
-        .size(12f32)
-        .spacing(0f32);
-
-    let mut bundle = DynamicFontBuilderBundle::new(base_dir.join("terraria"));
-    bundle.add_font(base_font.clone().file_name("Combat_Text"));
-    bundle.add_font(base_font.clone().file_name("Combat_Crit"));
-    bundle.add_font(base_font.clone().file_name("Item_Stack"));
-    bundle.add_font(
-        base_font.clone().file_name("Mouse_Text"), // .style(FontStyle::Bold),
-    );
-    bundle.add_font(
-        base_font.clone().file_name("Death_Text").size(24f32), // .style(FontStyle::Bold),
-    );
-    Ok(bundle)
-}
-
-#[allow(unused)]
-fn noxusboss_fonts(base_dir: &Path) -> anyhow::Result<DynamicFontBuilderBundle> {
-    let base_font = DynamicFontBuilder::new()
-        .use_kerning(true)
-        .vertical_offset(VerticalOffset::DefaultFontAscent)
-        .spacing(0f32);
-
-    let solyn_font = base_font
-        .clone()
-        .add_font_name(FontName::family("Noto Serif CJK JP"))
-        .size(28f32);
-
-    let mut bundle = DynamicFontBuilderBundle::new(base_dir.join("WrathOfTheGods"));
-    bundle.add_font(
-        solyn_font
-            .clone()
-            .file_name("SolynText")
-            .style(FontStyle::Regular),
-    );
-    bundle.add_font(
-        solyn_font
-            .clone()
-            .file_name("SolynTextItalics")
-            .style(FontStyle::Italic),
-    );
-    bundle.add_font(
-        base_font
-            .clone()
-            .file_name("SolynFightDialogue")
-            .add_font_name(FontName::family("07にくまるフォント"))
-            .size(32f32),
-    );
-    // bundle.add_font(
-    //     base_font
-    //         .clone()
-    //         .file_name("DraedonText")
-    //         .add_font_name("ノスタルドット（M+）")
-    //         // .add_font_name("x12y12pxMaruMinya")
-    //         // .vertical_offset(VerticalOffset::MaxAscent)
-    //         .use_kerning(false)
-    //         .size(20f32),
-    // );
-
-    Ok(bundle)
-}
-
-#[allow(unused)]
-fn terratcg_fonts(base_dir: &Path) -> anyhow::Result<DynamicFontBuilderBundle> {
-    let base_font = DynamicFontBuilder::new()
-        .add_font_name(FontName::family("なつめもじ抑"))
-        .add_font_name(FontName::family("Noto Sans JP"))
-        .use_kerning(false)
-        // .vertical_offset(VerticalOffset::MaxAscent);
-        .vertical_offset(VerticalOffset::DefaultFontAscent);
-
-    let mut bundle = DynamicFontBuilderBundle::new(base_dir.join("TerraTCG"));
-    bundle.add_font(
-        base_font
-            .clone()
-            .file_name("SmallText")
-            .size(15f32)
-            .spacing(0.25f32),
-    );
-
-    Ok(bundle)
 }

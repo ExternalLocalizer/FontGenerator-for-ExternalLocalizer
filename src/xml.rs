@@ -167,31 +167,9 @@ impl DynamicFontBuilder {
             .map(|name| -> anyhow::Result<_> { name.into_bundle(&font_system_source) })
             .collect::<anyhow::Result<Vec<FontNameBundle>>>()?;
 
-        // // FontNameからフォントパスを取得
-        // let font_path_list = font_name_bundle_list
-        //     .iter()
-        //     .map(|name| {
-        //         let Ok(handle) = name.get_font_handle(&font_system_source) else {
-        //             anyhow::bail!("Font not found: {}", name);
-        //         };
-
-        //         let Handle::Path {
-        //             path,
-        //             font_index: _,
-        //         } = handle
-        //         else {
-        //             anyhow::bail!("Failed to load font: {}", name);
-        //         };
-
-        //         let path = path.to_path_buf();
-        //         println!("Found font: {}", path.display());
-        //         Ok(path)
-        //     })
-        //     .collect::<anyhow::Result<Vec<_>>>()?;
-
         // フォントを読み込み、サポートされている文字を取得
         let mut include_chars: Vec<CharRangeList> = Vec::with_capacity(font_name_bundle_list.len());
-        for (font_idx, font_name) in font_name_bundle_list.iter().enumerate() {
+        for font_name in font_name_bundle_list.iter() {
             let font_path = font_name.path(&font_system_source)?;
             let font_file = font::File::open(font_path)?;
 
@@ -377,12 +355,6 @@ impl CharacterRegion {
         }
     }
 }
-
-// impl Into<Vec<CharacterRegion>> for CharRangeList {
-//     fn into(self) -> Vec<CharacterRegion> {
-//         self.into_iter().map(|range| range.into()).collect()
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

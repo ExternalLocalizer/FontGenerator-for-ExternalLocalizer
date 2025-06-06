@@ -15,14 +15,17 @@ pub enum FontName<'a> {
 }
 
 impl<'a> FontName<'a> {
+    #[allow(unused)]
     pub fn family<S: Into<Cow<'a, str>>>(name: S) -> Self {
         FontName::Family(name.into())
     }
 
+    #[allow(unused)]
     pub fn postscript<S: Into<Cow<'a, str>>>(name: S) -> Self {
         FontName::PostScript(name.into())
     }
 
+    #[allow(unused)]
     pub fn full<S: Into<Cow<'a, str>>>(name: S) -> Self {
         FontName::Full(name.into())
     }
@@ -72,18 +75,6 @@ impl<'a> FontName<'a> {
             postscript: Cow::Owned(postscript),
             full: Cow::Owned(full),
         })
-    }
-
-    pub fn path(&self, source: &SystemSource) -> anyhow::Result<PathBuf> {
-        if let font_kit::handle::Handle::Path {
-            path,
-            font_index: _,
-        } = self.get_font_handle(source)?
-        {
-            Ok(path)
-        } else {
-            anyhow::bail!("Failed to load font: {}", self);
-        }
     }
 }
 
